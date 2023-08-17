@@ -1,12 +1,12 @@
-cmd/migrate/migrate:
-	cd cmd/migrate
-	go build
-	cd -
+GO_FILES:=$(shell find . -type f -name '*.go' -print)
 
-cmd/server/server:
-	cd cmd/server
-	go build
-	cd -
+.PHONY: build_migrate
+build_migrate:
+	cd cmd/migrate && go build
 
-all: cmd/migrate/migrate cmd/server/server
+.PHONY: build_server
+build_server:
+	cd cmd/server && go build
+
 .PHONY: all
+all: cmd/migrate/migrate cmd/server/server
