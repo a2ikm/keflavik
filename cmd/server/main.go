@@ -1,10 +1,13 @@
 package main
 
 import (
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
+
+	_ "github.com/lib/pq"
 )
 
 type createUserRequest struct {
@@ -36,7 +39,9 @@ func writeErrorResponse(w http.ResponseWriter, errorCode string, format string, 
 	_ = json.NewEncoder(w).Encode(res)
 }
 
-type usersHandler struct{}
+type usersHandler struct {
+	db *sql.DB
+}
 
 func (h *usersHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
@@ -47,6 +52,11 @@ func (h *usersHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	var req createUserRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeErrorResponse(w, "bad_request", "Failed to parse request: %v", err)
+		return
+	}
+
+	if _, err := h.db.Exec("INSERT INTO users (name, password) VALUES ($1, $2);", req.Name, req.Password); err != nil {
+		writeErrorResponse(w, "internal_server_error", "Failed to store user information: %v", err)
 		return
 	}
 
@@ -63,8 +73,13 @@ func (h *usersHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
+	db, err := sql.Open("postgres", "postgres://postgres:postgres@localhost:5432/keflavik?sslmode=disable")
+	if err != nil {
+		log.Fatalf("Failed to connect postgres: %v", err)
+	}
+
 	mux := http.NewServeMux()
-	mux.Handle("/users", &usersHandler{})
+	mux.Handle("/users", &usersHandler{db})
 	mux.Handle("/", http.NotFoundHandler())
 
 	log.Printf("Start listening on :8080")
