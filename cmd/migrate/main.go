@@ -40,10 +40,6 @@ func run() error {
 	return nil
 }
 
-func wrongUsage() error {
-	return fmt.Errorf("usage: migrate <create|up>")
-}
-
 func create() error {
 	db, err := sql.Open("postgres", "postgres://postgres:postgres@localhost:5432?sslmode=disable")
 	if err != nil {
