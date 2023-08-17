@@ -46,10 +46,12 @@ func create() error {
 		return fmt.Errorf("failed to connect: %w", err)
 	}
 
-	query := `CREATE DATABASE keflavik`
-	_, err = db.Exec(query)
-	if err != nil {
+	if _, err = db.Exec(`CREATE DATABASE keflavik`); err != nil {
 		return fmt.Errorf("failed to create database: %w", err)
+	}
+
+	if _, err = db.Exec(`GRANT ALL PRIVILEGES ON DATABASE keflavik To postgres`); err != nil {
+		return fmt.Errorf("failed to grant privileges on database: %w", err)
 	}
 
 	return nil
