@@ -8,9 +8,8 @@ import (
 	"time"
 
 	migrate "github.com/golang-migrate/migrate/v4"
-	"github.com/golang-migrate/migrate/v4/database/postgres"
+	"github.com/golang-migrate/migrate/v4/database/pgx"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
-	_ "github.com/lib/pq"
 )
 
 func main() {
@@ -43,7 +42,7 @@ func run() error {
 }
 
 func create() error {
-	db, err := sql.Open("postgres", "postgres://postgres:postgres@localhost:5432?sslmode=disable")
+	db, err := sql.Open("pgx", "postgres://postgres:postgres@localhost:5432?sslmode=disable")
 	if err != nil {
 		return fmt.Errorf("failed to connect: %w", err)
 	}
@@ -60,7 +59,7 @@ func create() error {
 }
 
 func drop() error {
-	db, err := sql.Open("postgres", "postgres://postgres:postgres@localhost:5432?sslmode=disable")
+	db, err := sql.Open("pgx", "postgres://postgres:postgres@localhost:5432?sslmode=disable")
 	if err != nil {
 		return fmt.Errorf("failed to connect: %w", err)
 	}
@@ -73,12 +72,12 @@ func drop() error {
 }
 
 func up() error {
-	db, err := sql.Open("postgres", "postgres://postgres:postgres@localhost:5432/keflavik?sslmode=disable")
+	db, err := sql.Open("pgx", "postgres://postgres:postgres@localhost:5432/keflavik?sslmode=disable")
 	if err != nil {
 		return fmt.Errorf("failed to connect: %w", err)
 	}
 
-	driver, err := postgres.WithInstance(db, &postgres.Config{})
+	driver, err := pgx.WithInstance(db, &pgx.Config{})
 	if err != nil {
 		return fmt.Errorf("failed to initialize postgres: %w", err)
 	}
@@ -96,12 +95,12 @@ func up() error {
 }
 
 func down() error {
-	db, err := sql.Open("postgres", "postgres://postgres:postgres@localhost:5432/keflavik?sslmode=disable")
+	db, err := sql.Open("pgx", "postgres://postgres:postgres@localhost:5432/keflavik?sslmode=disable")
 	if err != nil {
 		return fmt.Errorf("failed to connect: %w", err)
 	}
 
-	driver, err := postgres.WithInstance(db, &postgres.Config{})
+	driver, err := pgx.WithInstance(db, &pgx.Config{})
 	if err != nil {
 		return fmt.Errorf("failed to initialize postgres: %w", err)
 	}

@@ -21,7 +21,7 @@ type CreatePostParams struct {
 }
 
 func (q *Queries) CreatePost(ctx context.Context, arg CreatePostParams) (Post, error) {
-	row := q.db.QueryRowContext(ctx, createPost, arg.UserID, arg.Body, arg.CreatedAt)
+	row := q.db.QueryRow(ctx, createPost, arg.UserID, arg.Body, arg.CreatedAt)
 	var i Post
 	err := row.Scan(
 		&i.ID,
@@ -42,7 +42,7 @@ type CreateSessionParams struct {
 }
 
 func (q *Queries) CreateSession(ctx context.Context, arg CreateSessionParams) (Session, error) {
-	row := q.db.QueryRowContext(ctx, createSession, arg.UserID, arg.AccessToken)
+	row := q.db.QueryRow(ctx, createSession, arg.UserID, arg.AccessToken)
 	var i Session
 	err := row.Scan(&i.ID, &i.UserID, &i.AccessToken)
 	return i, err
@@ -58,7 +58,7 @@ type CreateUserParams struct {
 }
 
 func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) error {
-	_, err := q.db.ExecContext(ctx, createUser, arg.Name, arg.PasswordHash)
+	_, err := q.db.Exec(ctx, createUser, arg.Name, arg.PasswordHash)
 	return err
 }
 
@@ -67,7 +67,7 @@ SELECT id, user_id, body, created_at FROM posts WHERE user_id = $1
 `
 
 func (q *Queries) GetPostsByUserId(ctx context.Context, userID int32) ([]Post, error) {
-	rows, err := q.db.QueryContext(ctx, getPostsByUserId, userID)
+	rows, err := q.db.Query(ctx, getPostsByUserId, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -85,9 +85,6 @@ func (q *Queries) GetPostsByUserId(ctx context.Context, userID int32) ([]Post, e
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -99,7 +96,7 @@ SELECT id, user_id, access_token FROM sessions WHERE access_token = $1 LIMIT 1
 `
 
 func (q *Queries) GetSessionByAccessToken(ctx context.Context, accessToken string) (Session, error) {
-	row := q.db.QueryRowContext(ctx, getSessionByAccessToken, accessToken)
+	row := q.db.QueryRow(ctx, getSessionByAccessToken, accessToken)
 	var i Session
 	err := row.Scan(&i.ID, &i.UserID, &i.AccessToken)
 	return i, err
@@ -110,7 +107,7 @@ SELECT id, name, password_hash FROM users WHERE id = $1 LIMIT 1
 `
 
 func (q *Queries) GetUserById(ctx context.Context, id int32) (User, error) {
-	row := q.db.QueryRowContext(ctx, getUserById, id)
+	row := q.db.QueryRow(ctx, getUserById, id)
 	var i User
 	err := row.Scan(&i.ID, &i.Name, &i.PasswordHash)
 	return i, err
@@ -121,7 +118,7 @@ SELECT id, name, password_hash FROM users WHERE name = $1 LIMIT 1
 `
 
 func (q *Queries) GetUserByName(ctx context.Context, name string) (User, error) {
-	row := q.db.QueryRowContext(ctx, getUserByName, name)
+	row := q.db.QueryRow(ctx, getUserByName, name)
 	var i User
 	err := row.Scan(&i.ID, &i.Name, &i.PasswordHash)
 	return i, err

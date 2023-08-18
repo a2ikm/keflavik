@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"crypto/rand"
 	"database/sql"
 	"encoding/json"
@@ -11,8 +12,8 @@ import (
 	"time"
 
 	"github.com/a2ikm/keflavik/model"
-	"github.com/lib/pq"
-	_ "github.com/lib/pq"
+	"github.com/jackc/pgconn"
+	"github.com/jackc/pgx/v4"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -191,8 +192,9 @@ func (h *createPostHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	params := model.CreatePostParams{
-		UserID: user.ID,
-		Body:   req.Body,
+		UserID:    user.ID,
+		Body:      req.Body,
+		CreatedAt: time.Now().UTC(),
 	}
 	_, err = h.queries.CreatePost(r.Context(), params)
 	if err != nil {
@@ -263,12 +265,13 @@ func (h *getPostsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
-	db, err := sql.Open("postgres", "postgres://postgres:postgres@localhost:5432/keflavik?sslmode=disable")
+	conn, err := pgx.Connect(context.Background(), "postgres://postgres:postgres@localhost:5432/keflavik?sslmode=disable")
 	if err != nil {
 		log.Fatalf("Failed to connect postgres: %v", err)
 	}
+	defer conn.Close(context.Background())
 
-	queries := model.New(db)
+	queries := model.New(conn)
 
 	mux := http.NewServeMux()
 	mux.Handle("/authenticate", &authenticateHandler{queries})
@@ -299,13 +302,12 @@ func generateRandomString(digit uint32) (string, error) {
 }
 
 func isUniquenessViolation(err error) bool {
-	const uniquenessViolation = pq.ErrorCode("23505")
-	if pgerr, ok := err.(*pq.Error); ok {
-		if pgerr.Code == uniquenessViolation {
-			return true
-		}
+	pgerr, ok := err.(*pgconn.PgError)
+	if !ok {
+		return false
 	}
-	return false
+
+	return pgerr.Code == "23505"
 }
 
 func authenticateWithAccessToken(queries *model.Queries, r *http.Request) (model.User, error) {
