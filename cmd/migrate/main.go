@@ -129,6 +129,8 @@ func new() error {
 		if err != nil {
 			return fmt.Errorf("failed to close file: %w", err)
 		}
+
+		fmt.Printf("%s\n", filename)
 	}
 
 	return nil
