@@ -40,11 +40,11 @@ func writeErrorResponse(w http.ResponseWriter, errorCode string, format string, 
 	_ = json.NewEncoder(w).Encode(res)
 }
 
-type usersHandler struct {
+type createUserHandler struct {
 	db *sql.DB
 }
 
-func (h *usersHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+func (h *createUserHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.NotFound(w, r)
 		return
@@ -70,7 +70,7 @@ func (h *usersHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	res := createUserResponse{
 		Ok: true,
 		Data: struct {
-			Name string "json:\"name\""
+			Name string `json:"name"`
 		}{
 			Name: req.Name,
 		},
@@ -86,7 +86,7 @@ func main() {
 	}
 
 	mux := http.NewServeMux()
-	mux.Handle("/users", &usersHandler{db})
+	mux.Handle("/create_user", &createUserHandler{db})
 	mux.Handle("/", http.NotFoundHandler())
 
 	log.Printf("Start listening on :8080")
