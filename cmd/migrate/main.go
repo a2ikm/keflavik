@@ -28,6 +28,8 @@ func run() error {
 	switch os.Args[1] {
 	case "create":
 		return create()
+	case "drop":
+		return drop()
 	case "up":
 		return up()
 	case "down":
@@ -52,6 +54,19 @@ func create() error {
 
 	if _, err = db.Exec(`GRANT ALL PRIVILEGES ON DATABASE keflavik To postgres`); err != nil {
 		return fmt.Errorf("failed to grant privileges on database: %w", err)
+	}
+
+	return nil
+}
+
+func drop() error {
+	db, err := sql.Open("postgres", "postgres://postgres:postgres@localhost:5432?sslmode=disable")
+	if err != nil {
+		return fmt.Errorf("failed to connect: %w", err)
+	}
+
+	if _, err = db.Exec(`DROP DATABASE keflavik`); err != nil {
+		return fmt.Errorf("failed to drop database: %w", err)
 	}
 
 	return nil
