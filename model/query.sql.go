@@ -9,6 +9,22 @@ import (
 	"context"
 )
 
+const createSession = `-- name: CreateSession :one
+INSERT INTO sessions (user_id, access_token) VALUES ($1, $2) RETURNING id, user_id, access_token
+`
+
+type CreateSessionParams struct {
+	UserID      int32
+	AccessToken string
+}
+
+func (q *Queries) CreateSession(ctx context.Context, arg CreateSessionParams) (Session, error) {
+	row := q.db.QueryRowContext(ctx, createSession, arg.UserID, arg.AccessToken)
+	var i Session
+	err := row.Scan(&i.ID, &i.UserID, &i.AccessToken)
+	return i, err
+}
+
 const createUser = `-- name: CreateUser :exec
 INSERT INTO users (name, password_hash) VALUES ($1, $2)
 `
@@ -24,17 +40,12 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) error {
 }
 
 const getUserByName = `-- name: GetUserByName :one
-SELECT name, password_hash FROM users WHERE name = $1 LIMIT 1
+SELECT id, name, password_hash FROM users WHERE name = $1 LIMIT 1
 `
 
-type GetUserByNameRow struct {
-	Name         string
-	PasswordHash string
-}
-
-func (q *Queries) GetUserByName(ctx context.Context, name string) (GetUserByNameRow, error) {
+func (q *Queries) GetUserByName(ctx context.Context, name string) (User, error) {
 	row := q.db.QueryRowContext(ctx, getUserByName, name)
-	var i GetUserByNameRow
-	err := row.Scan(&i.Name, &i.PasswordHash)
+	var i User
+	err := row.Scan(&i.ID, &i.Name, &i.PasswordHash)
 	return i, err
 }

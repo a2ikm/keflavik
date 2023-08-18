@@ -1,6 +1,7 @@
 package main
 
 import (
+	"crypto/rand"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -8,6 +9,7 @@ import (
 	"net/http"
 
 	"github.com/a2ikm/keflavik/model"
+	"github.com/lib/pq"
 	_ "github.com/lib/pq"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -92,7 +94,8 @@ type authenticateRequest struct {
 type authenticateResponse struct {
 	Ok   bool `json:"ok"`
 	Data struct {
-		Name string `json:"name"`
+		Name        string `json:"name"`
+		AccessToken string `json:"access_token"`
 	} `json:"data"`
 }
 
@@ -112,7 +115,7 @@ func (h *authenticateHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	row, err := h.queries.GetUserByName(r.Context(), req.Name)
+	user, err := h.queries.GetUserByName(r.Context(), req.Name)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			writeErrorResponse(w, "unauthorized", "name or password is incorrect")
@@ -123,18 +126,42 @@ func (h *authenticateHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) 
 		}
 	}
 
-	err = bcrypt.CompareHashAndPassword([]byte(row.PasswordHash), []byte(req.Password))
-	if err != nil {
+	if err = bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(req.Password)); err != nil {
 		writeErrorResponse(w, "unauthorized", "name or password is incorrect")
 		return
+	}
+
+	var session model.Session
+	for {
+		token, err := generateRandomString(64)
+		if err != nil {
+			continue
+		}
+
+		params := model.CreateSessionParams{
+			UserID:      user.ID,
+			AccessToken: token,
+		}
+		session, err = h.queries.CreateSession(r.Context(), params)
+		if err != nil {
+			if isUniquenessViolation(err) {
+				continue
+			}
+			writeErrorResponse(w, "internal_server_error", "Failed to fetch user: %v", err)
+			return
+		}
+
+		break
 	}
 
 	res := authenticateResponse{
 		Ok: true,
 		Data: struct {
-			Name string `json:"name"`
+			Name        string `json:"name"`
+			AccessToken string `json:"access_token"`
 		}{
-			Name: row.Name,
+			Name:        user.Name,
+			AccessToken: session.AccessToken,
 		},
 	}
 	w.WriteHeader(http.StatusOK)
@@ -158,4 +185,29 @@ func main() {
 	if err := http.ListenAndServe(":8000", mux); err != nil && err != http.ErrServerClosed {
 		log.Fatalf("Failed to listen and serve: %v", err)
 	}
+}
+
+func generateRandomString(digit uint32) (string, error) {
+	const letters = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+
+	b := make([]byte, digit)
+	if _, err := rand.Read(b); err != nil {
+		return "", fmt.Errorf("failed to generate random bytes: %w", err)
+	}
+
+	var result string
+	for _, v := range b {
+		result += string(letters[int(v)%len(letters)])
+	}
+	return result, nil
+}
+
+func isUniquenessViolation(err error) bool {
+	const uniquenessViolation = pq.ErrorCode("23505")
+	if pgerr, ok := err.(*pq.Error); ok {
+		if pgerr.Code == uniquenessViolation {
+			return true
+		}
+	}
+	return false
 }

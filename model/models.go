@@ -6,6 +6,12 @@ package model
 
 import ()
 
+type Session struct {
+	ID          int32
+	UserID      int32
+	AccessToken string
+}
+
 type User struct {
 	ID           int32
 	Name         string
