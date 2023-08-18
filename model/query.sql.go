@@ -7,7 +7,30 @@ package model
 
 import (
 	"context"
+	"time"
 )
+
+const createPost = `-- name: CreatePost :one
+INSERT INTO posts (user_id, body, created_at) VALUES ($1, $2, $3) RETURNING id, user_id, body, created_at
+`
+
+type CreatePostParams struct {
+	UserID    int32
+	Body      string
+	CreatedAt time.Time
+}
+
+func (q *Queries) CreatePost(ctx context.Context, arg CreatePostParams) (Post, error) {
+	row := q.db.QueryRowContext(ctx, createPost, arg.UserID, arg.Body, arg.CreatedAt)
+	var i Post
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.Body,
+		&i.CreatedAt,
+	)
+	return i, err
+}
 
 const createSession = `-- name: CreateSession :one
 INSERT INTO sessions (user_id, access_token) VALUES ($1, $2) RETURNING id, user_id, access_token
@@ -37,6 +60,28 @@ type CreateUserParams struct {
 func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) error {
 	_, err := q.db.ExecContext(ctx, createUser, arg.Name, arg.PasswordHash)
 	return err
+}
+
+const getSessionByAccessToken = `-- name: GetSessionByAccessToken :one
+SELECT id, user_id, access_token FROM sessions WHERE access_token = $1 LIMIT 1
+`
+
+func (q *Queries) GetSessionByAccessToken(ctx context.Context, accessToken string) (Session, error) {
+	row := q.db.QueryRowContext(ctx, getSessionByAccessToken, accessToken)
+	var i Session
+	err := row.Scan(&i.ID, &i.UserID, &i.AccessToken)
+	return i, err
+}
+
+const getUserById = `-- name: GetUserById :one
+SELECT id, name, password_hash FROM users WHERE id = $1 LIMIT 1
+`
+
+func (q *Queries) GetUserById(ctx context.Context, id int32) (User, error) {
+	row := q.db.QueryRowContext(ctx, getUserById, id)
+	var i User
+	err := row.Scan(&i.ID, &i.Name, &i.PasswordHash)
+	return i, err
 }
 
 const getUserByName = `-- name: GetUserByName :one

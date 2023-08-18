@@ -4,7 +4,16 @@
 
 package model
 
-import ()
+import (
+	"time"
+)
+
+type Post struct {
+	ID        int32
+	UserID    int32
+	Body      string
+	CreatedAt time.Time
+}
 
 type Session struct {
 	ID          int32

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strings"
 
 	"github.com/a2ikm/keflavik/model"
 	"github.com/lib/pq"
@@ -173,6 +174,91 @@ func (h *authenticateHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) 
 	_ = json.NewEncoder(w).Encode(res)
 }
 
+type createPostRequest struct {
+	Body string `json:"body"`
+}
+
+type createPostResponse struct {
+	Ok   bool `json:"ok"`
+	Data struct {
+	} `json:"data"`
+}
+
+type createPostHandler struct {
+	queries *model.Queries
+}
+
+func authenticateWithAccessToken(queries *model.Queries, r *http.Request) (model.User, error) {
+	authorization := r.Header.Get("Authorization")
+	if len(authorization) == 0 {
+		return model.User{}, fmt.Errorf("Missing Authorization header")
+	}
+
+	parts := strings.Split(authorization, " ")
+	if len(parts) != 2 {
+		return model.User{}, fmt.Errorf("Malformed Authorization header")
+	}
+	if strings.ToLower(parts[0]) != "bearer" {
+		return model.User{}, fmt.Errorf("Malformed Authorization header")
+	}
+
+	session, err := queries.GetSessionByAccessToken(r.Context(), parts[1])
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return model.User{}, fmt.Errorf("wrong access token")
+		} else {
+			return model.User{}, fmt.Errorf("something wrong")
+		}
+	}
+
+	user, err := queries.GetUserById(r.Context(), session.UserID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return model.User{}, fmt.Errorf("user associated with access token not found")
+		} else {
+			return model.User{}, fmt.Errorf("something wrong")
+		}
+	}
+
+	return user, nil
+}
+
+func (h *createPostHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.NotFound(w, r)
+		return
+	}
+
+	user, err := authenticateWithAccessToken(h.queries, r)
+	if err != nil {
+		writeErrorResponse(w, "unauthorized", "Failed to authenticate: %v", err)
+		return
+	}
+
+	var req createPostRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeErrorResponse(w, "bad_request", "Failed to parse request: %v", err)
+		return
+	}
+
+	params := model.CreatePostParams{
+		UserID: user.ID,
+		Body:   req.Body,
+	}
+	_, err = h.queries.CreatePost(r.Context(), params)
+	if err != nil {
+		writeErrorResponse(w, "bad_request", "Failed to store post: %v", err)
+		return
+	}
+
+	res := createPostResponse{
+		Ok:   true,
+		Data: struct{}{},
+	}
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(res)
+}
+
 func main() {
 	db, err := sql.Open("postgres", "postgres://postgres:postgres@localhost:5432/keflavik?sslmode=disable")
 	if err != nil {
@@ -184,6 +270,7 @@ func main() {
 	mux := http.NewServeMux()
 	mux.Handle("/authenticate", &authenticateHandler{queries})
 	mux.Handle("/create_user", &createUserHandler{queries})
+	mux.Handle("/create_post", &createPostHandler{queries})
 	mux.Handle("/", http.NotFoundHandler())
 
 	log.Printf("Start listening on :8080")

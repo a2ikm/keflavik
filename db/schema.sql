@@ -7,5 +7,12 @@ CREATE TABLE users (
 CREATE TABLE sessions (
   id serial PRIMARY KEY,
   user_id integer NOT NULL,
-  access_token VARCHAR(50) UNIQUE NOT NULL
+  access_token VARCHAR(255) UNIQUE NOT NULL
+);
+
+CREATE TABLE posts (
+  id serial PRIMARY KEY,
+  user_id integer NOT NULL,
+  body text NOT NULL,
+  created_at timestamp NOT NULL
 );
