@@ -8,6 +8,7 @@ import (
 	"net/http"
 
 	_ "github.com/lib/pq"
+	"golang.org/x/crypto/bcrypt"
 )
 
 type createUserRequest struct {
@@ -55,7 +56,13 @@ func (h *usersHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if _, err := h.db.Exec("INSERT INTO users (name, password) VALUES ($1, $2);", req.Name, req.Password); err != nil {
+	hashed, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+	if err != nil {
+		writeErrorResponse(w, "internal_server_error", "Failed to generate hashed password: %v", err)
+		return
+	}
+
+	if _, err := h.db.Exec("INSERT INTO users (name, password_hash) VALUES ($1, $2);", req.Name, hashed); err != nil {
 		writeErrorResponse(w, "internal_server_error", "Failed to store user information: %v", err)
 		return
 	}
