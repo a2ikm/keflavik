@@ -70,8 +70,13 @@ func (h *createUserHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		PasswordHash: string(hashed),
 	}
 	if err := h.queries.CreateUser(r.Context(), params); err != nil {
-		writeErrorResponse(w, "internal_server_error", "Failed to store user information: %v", err)
-		return
+		if isUniquenessViolation(err) {
+			writeErrorResponse(w, "bad_request", "name is already taken")
+			return
+		} else {
+			writeErrorResponse(w, "internal_server_error", "Failed to store user information: %v", err)
+			return
+		}
 	}
 
 	res := createUserResponse{
