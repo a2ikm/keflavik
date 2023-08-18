@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 
+	"github.com/a2ikm/keflavik/model"
 	_ "github.com/lib/pq"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -41,7 +42,7 @@ func writeErrorResponse(w http.ResponseWriter, errorCode string, format string, 
 }
 
 type createUserHandler struct {
-	db *sql.DB
+	queries *model.Queries
 }
 
 func (h *createUserHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -62,7 +63,11 @@ func (h *createUserHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if _, err := h.db.Exec("INSERT INTO users (name, password_hash) VALUES ($1, $2);", req.Name, hashed); err != nil {
+	params := model.CreateUserParams{
+		Name:         req.Name,
+		PasswordHash: string(hashed),
+	}
+	if err := h.queries.CreateUser(r.Context(), params); err != nil {
 		writeErrorResponse(w, "internal_server_error", "Failed to store user information: %v", err)
 		return
 	}
@@ -92,7 +97,7 @@ type authenticateResponse struct {
 }
 
 type authenticateHandler struct {
-	db *sql.DB
+	queries *model.Queries
 }
 
 func (h *authenticateHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -107,26 +112,18 @@ func (h *authenticateHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	rows, err := h.db.Query("SELECT name, password_hash FROM users WHERE name = $1 LIMIT 1", req.Name)
+	row, err := h.queries.GetUserByName(r.Context(), req.Name)
 	if err != nil {
-		writeErrorResponse(w, "internal_server_error", "Failed to fetch user: %v", err)
-		return
-	}
-	defer rows.Close()
-
-	if !rows.Next() {
-		writeErrorResponse(w, "unauthorized", "name or password is incorrect")
-		return
-	}
-
-	var name string
-	var passwordHash string
-	if err = rows.Scan(&name, &passwordHash); err != nil {
-		writeErrorResponse(w, "internal_server_error", "Failed to scan row: %v", err)
-		return
+		if err == sql.ErrNoRows {
+			writeErrorResponse(w, "unauthorized", "name or password is incorrect")
+			return
+		} else {
+			writeErrorResponse(w, "internal_server_error", "Failed to fetch user: %v", err)
+			return
+		}
 	}
 
-	err = bcrypt.CompareHashAndPassword([]byte(passwordHash), []byte(req.Password))
+	err = bcrypt.CompareHashAndPassword([]byte(row.PasswordHash), []byte(req.Password))
 	if err != nil {
 		writeErrorResponse(w, "unauthorized", "name or password is incorrect")
 		return
@@ -137,7 +134,7 @@ func (h *authenticateHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) 
 		Data: struct {
 			Name string `json:"name"`
 		}{
-			Name: name,
+			Name: row.Name,
 		},
 	}
 	w.WriteHeader(http.StatusOK)
@@ -150,9 +147,11 @@ func main() {
 		log.Fatalf("Failed to connect postgres: %v", err)
 	}
 
+	queries := model.New(db)
+
 	mux := http.NewServeMux()
-	mux.Handle("/authenticate", &authenticateHandler{db})
-	mux.Handle("/create_user", &createUserHandler{db})
+	mux.Handle("/authenticate", &authenticateHandler{queries})
+	mux.Handle("/create_user", &createUserHandler{queries})
 	mux.Handle("/", http.NotFoundHandler())
 
 	log.Printf("Start listening on :8080")
