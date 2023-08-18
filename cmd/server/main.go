@@ -27,23 +27,6 @@ type createUserResponse struct {
 	} `json:"data"`
 }
 
-type errorResponse struct {
-	Ok           bool   `json:"ok"`
-	ErrorCode    string `json:"error_code"`
-	ErrorMessage string `json:"error_message"`
-}
-
-func writeErrorResponse(w http.ResponseWriter, errorCode string, format string, a ...any) {
-	res := errorResponse{
-		Ok:           false,
-		ErrorCode:    errorCode,
-		ErrorMessage: fmt.Sprintf(format, a...),
-	}
-
-	w.WriteHeader(http.StatusOK)
-	_ = json.NewEncoder(w).Encode(res)
-}
-
 type createUserHandler struct {
 	queries *model.Queries
 }
@@ -188,41 +171,6 @@ type createPostHandler struct {
 	queries *model.Queries
 }
 
-func authenticateWithAccessToken(queries *model.Queries, r *http.Request) (model.User, error) {
-	authorization := r.Header.Get("Authorization")
-	if len(authorization) == 0 {
-		return model.User{}, fmt.Errorf("Missing Authorization header")
-	}
-
-	parts := strings.Split(authorization, " ")
-	if len(parts) != 2 {
-		return model.User{}, fmt.Errorf("Malformed Authorization header")
-	}
-	if strings.ToLower(parts[0]) != "bearer" {
-		return model.User{}, fmt.Errorf("Malformed Authorization header")
-	}
-
-	session, err := queries.GetSessionByAccessToken(r.Context(), parts[1])
-	if err != nil {
-		if err == sql.ErrNoRows {
-			return model.User{}, fmt.Errorf("wrong access token")
-		} else {
-			return model.User{}, fmt.Errorf("something wrong")
-		}
-	}
-
-	user, err := queries.GetUserById(r.Context(), session.UserID)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			return model.User{}, fmt.Errorf("user associated with access token not found")
-		} else {
-			return model.User{}, fmt.Errorf("something wrong")
-		}
-	}
-
-	return user, nil
-}
-
 func (h *createPostHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.NotFound(w, r)
@@ -302,4 +250,56 @@ func isUniquenessViolation(err error) bool {
 		}
 	}
 	return false
+}
+
+func authenticateWithAccessToken(queries *model.Queries, r *http.Request) (model.User, error) {
+	authorization := r.Header.Get("Authorization")
+	if len(authorization) == 0 {
+		return model.User{}, fmt.Errorf("Missing Authorization header")
+	}
+
+	parts := strings.Split(authorization, " ")
+	if len(parts) != 2 {
+		return model.User{}, fmt.Errorf("Malformed Authorization header")
+	}
+	if strings.ToLower(parts[0]) != "bearer" {
+		return model.User{}, fmt.Errorf("Malformed Authorization header")
+	}
+
+	session, err := queries.GetSessionByAccessToken(r.Context(), parts[1])
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return model.User{}, fmt.Errorf("wrong access token")
+		} else {
+			return model.User{}, fmt.Errorf("something wrong")
+		}
+	}
+
+	user, err := queries.GetUserById(r.Context(), session.UserID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return model.User{}, fmt.Errorf("user associated with access token not found")
+		} else {
+			return model.User{}, fmt.Errorf("something wrong")
+		}
+	}
+
+	return user, nil
+}
+
+type errorResponse struct {
+	Ok           bool   `json:"ok"`
+	ErrorCode    string `json:"error_code"`
+	ErrorMessage string `json:"error_message"`
+}
+
+func writeErrorResponse(w http.ResponseWriter, errorCode string, format string, a ...any) {
+	res := errorResponse{
+		Ok:           false,
+		ErrorCode:    errorCode,
+		ErrorMessage: fmt.Sprintf(format, a...),
+	}
+
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(res)
 }
