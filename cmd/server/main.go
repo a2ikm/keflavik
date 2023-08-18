@@ -311,15 +311,15 @@ func isUniquenessViolation(err error) bool {
 func authenticateWithAccessToken(queries *model.Queries, r *http.Request) (model.User, error) {
 	authorization := r.Header.Get("Authorization")
 	if len(authorization) == 0 {
-		return model.User{}, fmt.Errorf("Missing Authorization header")
+		return model.User{}, fmt.Errorf("missing Authorization header")
 	}
 
 	parts := strings.Split(authorization, " ")
 	if len(parts) != 2 {
-		return model.User{}, fmt.Errorf("Malformed Authorization header")
+		return model.User{}, fmt.Errorf("malformed Authorization header")
 	}
 	if strings.ToLower(parts[0]) != "bearer" {
-		return model.User{}, fmt.Errorf("Malformed Authorization header")
+		return model.User{}, fmt.Errorf("malformed Authorization header")
 	}
 
 	session, err := queries.GetSessionByAccessToken(r.Context(), parts[1])
