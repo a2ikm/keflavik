@@ -79,6 +79,71 @@ func (h *createUserHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(res)
 }
 
+type authenticateRequest struct {
+	Name     string `json:"name"`
+	Password string `json:"password"`
+}
+
+type authenticateResponse struct {
+	Ok   bool `json:"ok"`
+	Data struct {
+		Name string `json:"name"`
+	} `json:"data"`
+}
+
+type authenticateHandler struct {
+	db *sql.DB
+}
+
+func (h *authenticateHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.NotFound(w, r)
+		return
+	}
+
+	var req authenticateRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeErrorResponse(w, "bad_request", "Failed to parse request: %v", err)
+		return
+	}
+
+	rows, err := h.db.Query("SELECT name, password_hash FROM users WHERE name = $1 LIMIT 1", req.Name)
+	if err != nil {
+		writeErrorResponse(w, "internal_server_error", "Failed to fetch user: %v", err)
+		return
+	}
+	defer rows.Close()
+
+	if !rows.Next() {
+		writeErrorResponse(w, "unauthorized", "name or password is incorrect")
+		return
+	}
+
+	var name string
+	var passwordHash string
+	if err = rows.Scan(&name, &passwordHash); err != nil {
+		writeErrorResponse(w, "internal_server_error", "Failed to scan row: %v", err)
+		return
+	}
+
+	err = bcrypt.CompareHashAndPassword([]byte(passwordHash), []byte(req.Password))
+	if err != nil {
+		writeErrorResponse(w, "unauthorized", "name or password is incorrect")
+		return
+	}
+
+	res := authenticateResponse{
+		Ok: true,
+		Data: struct {
+			Name string `json:"name"`
+		}{
+			Name: name,
+		},
+	}
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(res)
+}
+
 func main() {
 	db, err := sql.Open("postgres", "postgres://postgres:postgres@localhost:5432/keflavik?sslmode=disable")
 	if err != nil {
@@ -86,6 +151,7 @@ func main() {
 	}
 
 	mux := http.NewServeMux()
+	mux.Handle("/authenticate", &authenticateHandler{db})
 	mux.Handle("/create_user", &createUserHandler{db})
 	mux.Handle("/", http.NotFoundHandler())
 
