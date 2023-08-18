@@ -62,6 +62,38 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) error {
 	return err
 }
 
+const getPostsByUserId = `-- name: GetPostsByUserId :many
+SELECT id, user_id, body, created_at FROM posts WHERE user_id = $1
+`
+
+func (q *Queries) GetPostsByUserId(ctx context.Context, userID int32) ([]Post, error) {
+	rows, err := q.db.QueryContext(ctx, getPostsByUserId, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Post
+	for rows.Next() {
+		var i Post
+		if err := rows.Scan(
+			&i.ID,
+			&i.UserID,
+			&i.Body,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getSessionByAccessToken = `-- name: GetSessionByAccessToken :one
 SELECT id, user_id, access_token FROM sessions WHERE access_token = $1 LIMIT 1
 `

@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/a2ikm/keflavik/model"
 	"github.com/lib/pq"
@@ -207,6 +208,60 @@ func (h *createPostHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(res)
 }
 
+type PostInResponse struct {
+	Body      string    `json:"body"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+type getPostsResponse struct {
+	Ok   bool `json:"ok"`
+	Data struct {
+		Posts []PostInResponse `json:"posts"`
+	} `json:"data"`
+}
+
+type getPostsHandler struct {
+	queries *model.Queries
+}
+
+func (h *getPostsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.NotFound(w, r)
+		return
+	}
+
+	user, err := authenticateWithAccessToken(h.queries, r)
+	if err != nil {
+		writeErrorResponse(w, "unauthorized", "Failed to authenticate: %v", err)
+		return
+	}
+
+	posts, err := h.queries.GetPostsByUserId(r.Context(), user.ID)
+	if err != nil {
+		writeErrorResponse(w, "bad_request", "Failed to store post: %v", err)
+		return
+	}
+
+	postsInResponse := make([]PostInResponse, len(posts))
+	for _, post := range posts {
+		postsInResponse = append(postsInResponse, PostInResponse{
+			Body:      post.Body,
+			CreatedAt: post.CreatedAt,
+		})
+	}
+
+	res := getPostsResponse{
+		Ok: true,
+		Data: struct {
+			Posts []PostInResponse `json:"posts"`
+		}{
+			Posts: postsInResponse,
+		},
+	}
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(res)
+}
+
 func main() {
 	db, err := sql.Open("postgres", "postgres://postgres:postgres@localhost:5432/keflavik?sslmode=disable")
 	if err != nil {
@@ -219,6 +274,7 @@ func main() {
 	mux.Handle("/authenticate", &authenticateHandler{queries})
 	mux.Handle("/create_user", &createUserHandler{queries})
 	mux.Handle("/create_post", &createPostHandler{queries})
+	mux.Handle("/get_posts", &getPostsHandler{queries})
 	mux.Handle("/", http.NotFoundHandler())
 
 	log.Printf("Start listening on :8080")
